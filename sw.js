@@ -2,7 +2,9 @@ const CACHE_NAME = 'workout-app-v1';
 const urlsToCache = [
   '/leejusuk208.github.io/',
   '/leejusuk208.github.io/index.html',
-  '/leejusuk208.github.io/manifest.json'
+  '/leejusuk208.github.io/manifest.json',
+  '/leejusuk208.github.io/icon-192.png',
+  '/leejusuk208.github.io/icon-512.png'
 ];
 
 // 서비스 워커 설치 및 캐싱
