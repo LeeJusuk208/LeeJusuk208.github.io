@@ -1,10 +1,10 @@
 const CACHE_NAME = 'workout-app-v2';
 const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 // 서비스 워커 설치 이벤트
