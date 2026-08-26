@@ -414,8 +414,30 @@
             }).join(''));
             return JSON.parse(jsonPayload);
         } catch (e) {
+            console.error("JWT 파싱 에러:", e);
             return null;
         }
+    }
+
+    // UI 상태 업데이트: 로그인 성공 상태
+    function showLoggedInUI(userProfile) {
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('userInfo').style.display = 'flex';
+        document.getElementById('logoutBtn').style.display = 'block';
+
+        if (userProfile.name) {
+            document.getElementById('userName').textContent = userProfile.name;
+        }
+        if (userProfile.picture) {
+            document.getElementById('userAvatar').src = userProfile.picture;
+        }
+    }
+
+    // UI 상태 업데이트: 로그아웃 상태
+    function showLoggedOutUI() {
+        document.getElementById('loginBtn').style.display = 'block';
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'none';
     }
 
     // Google One Tap 및 Token Client 초기화
@@ -429,7 +451,7 @@
             auto_select: true
         });
 
-        // 2. Drive 연동용 OAuth2 Token Client 초기화
+        // 2. OAuth 토큰 클라이언트 초기화
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
@@ -442,47 +464,50 @@
             },
         });
 
-        // 저장된 로그인 기록이 있다면 One Tap 팝업 표시
-        if (localStorage.getItem('isLoggedIn') === 'true') {
+        // 이미 로그인된 사용자가 있는지 로컬스토리지 확인
+        const savedUser = localStorage.getItem('googleUser');
+        if (savedUser) {
+            showLoggedInUI(JSON.parse(savedUser));
+        } else {
+            // 로그인 정보가 없으면 One Tap 팝업 띄우기
             google.accounts.id.prompt();
         }
     }
 
-    // One Tap 콜백 처리 (프로필만 파싱하여 화면 적용)
+    // One Tap 콜백 처리
     function handleOneTapResponse(response) {
         const payload = parseJwt(response.credential);
         if (payload) {
-            localStorage.setItem('isLoggedIn', 'true');
+            const userData = {
+                name: payload.name,
+                picture: payload.picture
+            };
             
-            // UI 업데이트
-            if (payload.picture) document.getElementById('userAvatar').src = payload.picture;
-            if (payload.name) document.getElementById('userName').textContent = payload.name;
+            // 로컬 스토리지에 유저 정보 저장
+            localStorage.setItem('googleUser', JSON.stringify(userData));
             
-            document.getElementById('loginBtn').style.display = 'none';
-            document.getElementById('userInfo').style.display = 'flex';
-            document.getElementById('logoutBtn').style.display = 'block';
-
+            // UI 변경 실행
+            showLoggedInUI(userData);
             updateSyncStatus("로그인 완료");
         }
     }
 
-    // 수동 로그인 버튼 클릭
+    // 수동 로그인 버튼 클릭 처리
     document.getElementById('loginBtn').addEventListener('click', () => {
         if (tokenClient) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            google.accounts.id.prompt();
         }
     });
 
     // 로그아웃 처리
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('googleUser');
         accessToken = null;
         
         google.accounts.id.disableAutoSelect();
-
-        document.getElementById('userInfo').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = 'none';
-        document.getElementById('loginBtn').style.display = 'block';
+        showLoggedOutUI();
         
         alert("로그아웃되었습니다.");
     });
@@ -491,11 +516,10 @@
         document.getElementById('syncStatus').textContent = text;
     }
 
-    // 드라이브 업로드 함수 (토큰이 없으면 토큰 요청을 먼저 진행)
+    // 드라이브 동기화 기능 (저장 시)
     async function autoUploadToDrive() {
         if (!accessToken) {
-            if (localStorage.getItem('isLoggedIn') === 'true' && tokenClient) {
-                // 저장 동작 시점에 토큰이 없으면 승인 요청
+            if (localStorage.getItem('googleUser') && tokenClient) {
                 tokenClient.requestAccessToken({ prompt: '' });
             }
             return;
@@ -548,7 +572,7 @@
         }
     }
 
-    // 드라이브 데이터 다운로드
+    // 드라이브 다운로드 기능
     async function autoDownloadFromDrive() {
         if (!accessToken) return;
 
