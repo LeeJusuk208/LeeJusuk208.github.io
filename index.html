@@ -368,7 +368,7 @@
                 <img id="userAvatar" class="user-avatar" src="" alt="프로필">
                 <div>
                     <div id="userName" class="user-name">구글 사용자</div>
-                    <div id="syncStatus" class="sync-status">자동 동기화 활성화됨</div>
+                    <div id="syncStatus" class="sync-status">자동 동기화 준비 완료</div>
                 </div>
             </div>
             <button id="logoutBtn" class="btn-logout" style="display: none;">로그아웃</button>
@@ -397,80 +397,103 @@
 </div>
 
 <script>
-    // --- [Google OAuth 및 자동 동기화 설정] ---
+    // --- [Google OAuth 및 One Tap 설정] ---
     const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com';
-    const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
     let tokenClient;
     let accessToken = null;
 
+    // JWT 파싱 함수 (One Tap 자격증명 수령용)
+    function parseJwt(token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Google One Tap 및 Token Client 초기화
     function initGoogleAuth() {
         if (typeof google === 'undefined') return;
 
+        // 1. One Tap 로그인 초기화
+        google.accounts.id.initialize({
+            client_id: CLIENT_ID,
+            callback: handleOneTapResponse,
+            auto_select: true // 이전에 로그인한 경우 자동 선택 허용
+        });
+
+        // 2. Drive 연동용 OAuth2 Token Client 초기화
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
             callback: async (tokenResponse) => {
                 if (tokenResponse.access_token) {
                     accessToken = tokenResponse.access_token;
-                    
-                    // 로그인 세션 상태 저장
-                    localStorage.setItem('isLoggedIn', 'true');
-                    
-                    await fetchUserProfile();
-                    
-                    document.getElementById('loginBtn').style.display = 'none';
-                    document.getElementById('userInfo').style.display = 'flex';
-                    document.getElementById('logoutBtn').style.display = 'block';
-                    
                     updateSyncStatus("최신 데이터 동기화 완료");
                     await autoDownloadFromDrive();
                 }
             },
         });
 
-        // 새로고침 시 이전에 로그인했었다면 자동으로 토큰 재발급 요청 (팝업 없이 처리)
+        // 페이지 로드 시 One Tap 원클릭 프롬프트 호출
         if (localStorage.getItem('isLoggedIn') === 'true') {
-            tokenClient.requestAccessToken({ prompt: '' });
+            google.accounts.id.prompt();
         }
     }
 
+    // One Tap 콜백 처리
+    function handleOneTapResponse(response) {
+        const payload = parseJwt(response.credential);
+        if (payload) {
+            localStorage.setItem('isLoggedIn', 'true');
+            
+            // UI 업데이트
+            if (payload.picture) document.getElementById('userAvatar').src = payload.picture;
+            if (payload.name) document.getElementById('userName').textContent = payload.name;
+            
+            document.getElementById('loginBtn').style.display = 'none';
+            document.getElementById('userInfo').style.display = 'flex';
+            document.getElementById('logoutBtn').style.display = 'block';
+
+            // 구글 드라이브 권한 요청 (필요 시)
+            requestDriveAccess();
+        }
+    }
+
+    // 수동 로그인 버튼 클릭
     document.getElementById('loginBtn').addEventListener('click', () => {
         if (tokenClient) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
         }
     });
 
-    async function fetchUserProfile() {
-        try {
-            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { 'Authorization': 'Bearer ' + accessToken }
-            });
-            const profile = await res.json();
-            if (profile.picture) document.getElementById('userAvatar').src = profile.picture;
-            if (profile.name) document.getElementById('userName').textContent = profile.name;
-        } catch (e) {
-            console.error("프로필 정보 조회 실패", e);
+    // 드라이브 접근용 토큰 요청
+    function requestDriveAccess() {
+        if (tokenClient && !accessToken) {
+            tokenClient.requestAccessToken({ prompt: '' });
         }
     }
 
     // 로그아웃 처리
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        if (accessToken) {
-            google.accounts.oauth2.revoke(accessToken, () => {
-                accessToken = null;
-                localStorage.removeItem('isLoggedIn');
-                document.getElementById('userInfo').style.display = 'none';
-                document.getElementById('logoutBtn').style.display = 'none';
-                document.getElementById('loginBtn').style.display = 'block';
-                alert("로그아웃되었습니다.");
-            });
-        } else {
-            localStorage.removeItem('isLoggedIn');
-            document.getElementById('userInfo').style.display = 'none';
-            document.getElementById('logoutBtn').style.display = 'none';
-            document.getElementById('loginBtn').style.display = 'block';
-        }
+        localStorage.removeItem('isLoggedIn');
+        accessToken = null;
+        
+        // One Tap 자동 선택 비활성화
+        google.accounts.id.disableAutoSelect();
+
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('loginBtn').style.display = 'block';
+        
+        alert("로그아웃되었습니다.");
     });
 
     function updateSyncStatus(text) {
