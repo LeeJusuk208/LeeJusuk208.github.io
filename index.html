@@ -99,6 +99,11 @@
             font-weight: bold;
         }
 
+        .btn-login:disabled {
+            background-color: #A0C4EE;
+            cursor: not-allowed;
+        }
+
         .btn-logout {
             background-color: #F0F2F5;
             color: #555;
@@ -404,7 +409,7 @@
     let tokenClient;
     let accessToken = null;
 
-    // JWT 파싱 함수 (One Tap 자격증명 수령용)
+    // JWT 파싱 함수
     function parseJwt(token) {
         try {
             const base64Url = token.split('.')[1];
@@ -421,21 +426,29 @@
 
     // UI 상태 업데이트: 로그인 성공 상태
     function showLoggedInUI(userProfile) {
-        document.getElementById('loginBtn').style.display = 'none';
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = 'Google 로그인';
+        loginBtn.disabled = false;
+        loginBtn.style.display = 'none';
+
         document.getElementById('userInfo').style.display = 'flex';
         document.getElementById('logoutBtn').style.display = 'block';
 
-        if (userProfile.name) {
+        if (userProfile && userProfile.name) {
             document.getElementById('userName').textContent = userProfile.name;
         }
-        if (userProfile.picture) {
+        if (userProfile && userProfile.picture) {
             document.getElementById('userAvatar').src = userProfile.picture;
         }
     }
 
     // UI 상태 업데이트: 로그아웃 상태
     function showLoggedOutUI() {
-        document.getElementById('loginBtn').style.display = 'block';
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = 'Google 로그인';
+        loginBtn.disabled = false;
+        loginBtn.style.display = 'block';
+
         document.getElementById('userInfo').style.display = 'none';
         document.getElementById('logoutBtn').style.display = 'none';
     }
@@ -444,14 +457,20 @@
     function initGoogleAuth() {
         if (typeof google === 'undefined') return;
 
-        // 1. One Tap 로그인 초기화
+        // 1. 페이지 로드 즉시 기존 로그인 세션이 있는지 확인 후 UI 반영
+        const savedUser = localStorage.getItem('googleUser');
+        if (savedUser) {
+            showLoggedInUI(JSON.parse(savedUser));
+        }
+
+        // 2. One Tap 로그인 초기화
         google.accounts.id.initialize({
             client_id: CLIENT_ID,
             callback: handleOneTapResponse,
             auto_select: true
         });
 
-        // 2. OAuth 토큰 클라이언트 초기화
+        // 3. OAuth 토큰 클라이언트 초기화
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
@@ -459,17 +478,27 @@
                 if (tokenResponse.access_token) {
                     accessToken = tokenResponse.access_token;
                     updateSyncStatus("최신 데이터 동기화 완료");
+
+                    // 토큰 수령 직후 수동 로그인 처리 UI 반영
+                    const currentSavedUser = localStorage.getItem('googleUser');
+                    if (currentSavedUser) {
+                        showLoggedInUI(JSON.parse(currentSavedUser));
+                    } else {
+                        // 기본 유저 정보 세팅
+                        const tempUser = { name: '구글 사용자', picture: 'https://via.placeholder.com/36' };
+                        localStorage.setItem('googleUser', JSON.stringify(tempUser));
+                        showLoggedInUI(tempUser);
+                    }
+
                     await autoDownloadFromDrive();
+                } else {
+                    showLoggedOutUI();
                 }
             },
         });
 
-        // 이미 로그인된 사용자가 있는지 로컬스토리지 확인
-        const savedUser = localStorage.getItem('googleUser');
-        if (savedUser) {
-            showLoggedInUI(JSON.parse(savedUser));
-        } else {
-            // 로그인 정보가 없으면 One Tap 팝업 띄우기
+        // 로그인 내역이 없는 경우에만 One Tap 팝업 표시
+        if (!savedUser) {
             google.accounts.id.prompt();
         }
     }
@@ -483,10 +512,8 @@
                 picture: payload.picture
             };
             
-            // 로컬 스토리지에 유저 정보 저장
+            // 로컬 스토리지 저장 및 UI 즉시 적용
             localStorage.setItem('googleUser', JSON.stringify(userData));
-            
-            // UI 변경 실행
             showLoggedInUI(userData);
             updateSyncStatus("로그인 완료");
         }
@@ -494,6 +521,10 @@
 
     // 수동 로그인 버튼 클릭 처리
     document.getElementById('loginBtn').addEventListener('click', () => {
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = '로그인 중...';
+        loginBtn.disabled = true;
+
         if (tokenClient) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
@@ -606,7 +637,7 @@
     }
 
     window.onload = function () {
-        setTimeout(initGoogleAuth, 500);
+        setTimeout(initGoogleAuth, 300);
     };
 
     // --- [앱 기능 로직] ---
