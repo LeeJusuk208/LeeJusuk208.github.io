@@ -398,7 +398,6 @@
 
 <script>
     // --- [Google OAuth 및 자동 동기화 설정] ---
-    // ⚠️ Client ID를 설정하세요.
     const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
@@ -408,7 +407,6 @@
     function initGoogleAuth() {
         if (typeof google === 'undefined') return;
 
-        // OAuth2 토큰 클라이언트 단일 초기화 (팝업 1회만 노출)
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
@@ -416,7 +414,9 @@
                 if (tokenResponse.access_token) {
                     accessToken = tokenResponse.access_token;
                     
-                    // 유저 프로필 조회
+                    // 로그인 세션 상태 저장
+                    localStorage.setItem('isLoggedIn', 'true');
+                    
                     await fetchUserProfile();
                     
                     document.getElementById('loginBtn').style.display = 'none';
@@ -428,6 +428,11 @@
                 }
             },
         });
+
+        // 새로고침 시 이전에 로그인했었다면 자동으로 토큰 재발급 요청 (팝업 없이 처리)
+        if (localStorage.getItem('isLoggedIn') === 'true') {
+            tokenClient.requestAccessToken({ prompt: '' });
+        }
     }
 
     document.getElementById('loginBtn').addEventListener('click', () => {
@@ -449,12 +454,23 @@
         }
     }
 
+    // 로그아웃 처리
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        accessToken = null;
-        document.getElementById('userInfo').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = 'none';
-        document.getElementById('loginBtn').style.display = 'block';
-        alert("로그아웃되었습니다.");
+        if (accessToken) {
+            google.accounts.oauth2.revoke(accessToken, () => {
+                accessToken = null;
+                localStorage.removeItem('isLoggedIn');
+                document.getElementById('userInfo').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'none';
+                document.getElementById('loginBtn').style.display = 'block';
+                alert("로그아웃되었습니다.");
+            });
+        } else {
+            localStorage.removeItem('isLoggedIn');
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('loginBtn').style.display = 'block';
+        }
     });
 
     function updateSyncStatus(text) {
@@ -546,7 +562,7 @@
     }
 
     window.onload = function () {
-        setTimeout(initGoogleAuth, 1000);
+        setTimeout(initGoogleAuth, 500);
     };
 
     // --- [앱 기능 로직] ---
@@ -632,7 +648,6 @@
         }
     });
 
-    // --- [수정된 최근 기록 힌트 업데이트 함수] ---
     function updateRecentHint(workoutType) {
         if (!workoutType) {
             recentHint.innerHTML = '';
@@ -641,9 +656,8 @@
 
         const today = new Date().toLocaleDateString('ko-KR');
 
-        // 오늘 날짜(today)가 아닌 '이전 과거 날짜' 중 가장 최근 기록 탐색
         for (const log of dailyLogs) {
-            if (log.date === today) continue; // 오늘 기록은 건너뜀
+            if (log.date === today) continue;
 
             const foundWorkout = log.workouts.find(w => w.type === workoutType);
             if (foundWorkout && foundWorkout.sets.length > 0) {
