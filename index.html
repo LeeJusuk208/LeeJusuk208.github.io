@@ -88,6 +88,17 @@
             margin-top: 2px;
         }
 
+        .btn-login {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
         .btn-logout {
             background-color: #F0F2F5;
             color: #555;
@@ -351,14 +362,12 @@
     <!-- 기록 목록 및 인증 영역 -->
     <section class="card">
         <div class="auth-section">
-            <!-- 미로그인 상태: 구글 로그인 버튼 -->
-            <div id="gAuthBtn"></div>
+            <button id="loginBtn" class="btn-login">Google 로그인</button>
             
-            <!-- 로그인 상태: 프로필 정보 및 로그아웃 버튼 -->
             <div id="userInfo" class="user-profile" style="display: none;">
                 <img id="userAvatar" class="user-avatar" src="" alt="프로필">
                 <div>
-                    <div id="userName" class="user-name"></div>
+                    <div id="userName" class="user-name">구글 사용자</div>
                     <div id="syncStatus" class="sync-status">자동 동기화 활성화됨</div>
                 </div>
             </div>
@@ -389,71 +398,62 @@
 
 <script>
     // --- [Google OAuth 및 자동 동기화 설정] ---
-    // ⚠️ 아래 Client ID를 구글 콘솔에서 발급받은 본인 Client ID로 설정하세요!
+    // ⚠️ Client ID를 설정하세요.
     const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com';
-    const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
     let tokenClient;
     let accessToken = null;
 
-    function parseJwt(token) {
-        try {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            return JSON.parse(decodeURIComponent(escape(window.atob(base64))));
-        } catch (e) {
-            return null;
-        }
-    }
-
     function initGoogleAuth() {
         if (typeof google === 'undefined') return;
 
-        google.accounts.id.initialize({
-            client_id: CLIENT_ID,
-            callback: handleCredentialResponse
-        });
-
-        google.accounts.id.renderButton(
-            document.getElementById("gAuthBtn"),
-            { theme: "outline", size: "medium" }
-        );
-
+        // OAuth2 토큰 클라이언트 단일 초기화 (팝업 1회만 노출)
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
             callback: async (tokenResponse) => {
                 if (tokenResponse.access_token) {
                     accessToken = tokenResponse.access_token;
+                    
+                    // 유저 프로필 조회
+                    await fetchUserProfile();
+                    
+                    document.getElementById('loginBtn').style.display = 'none';
+                    document.getElementById('userInfo').style.display = 'flex';
+                    document.getElementById('logoutBtn').style.display = 'block';
+                    
                     updateSyncStatus("최신 데이터 동기화 완료");
-                    // 로그인 성공 시 드라이브 데이터 자동 불러오기
                     await autoDownloadFromDrive();
                 }
             },
         });
     }
 
-    function handleCredentialResponse(response) {
-        const payload = parseJwt(response.credential);
-        if (payload) {
-            // 프로필 정보 표시
-            document.getElementById('userAvatar').src = payload.picture || '';
-            document.getElementById('userName').textContent = payload.name || '사용자';
-            document.getElementById('gAuthBtn').style.display = 'none';
-            document.getElementById('userInfo').style.display = 'flex';
-            document.getElementById('logoutBtn').style.display = 'block';
+    document.getElementById('loginBtn').addEventListener('click', () => {
+        if (tokenClient) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        }
+    });
 
-            // Drive API 접근 토큰 요청
-            tokenClient.requestAccessToken();
+    async function fetchUserProfile() {
+        try {
+            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
+            });
+            const profile = await res.json();
+            if (profile.picture) document.getElementById('userAvatar').src = profile.picture;
+            if (profile.name) document.getElementById('userName').textContent = profile.name;
+        } catch (e) {
+            console.error("프로필 정보 조회 실패", e);
         }
     }
 
-    // 로그아웃 처리
     document.getElementById('logoutBtn').addEventListener('click', () => {
         accessToken = null;
         document.getElementById('userInfo').style.display = 'none';
         document.getElementById('logoutBtn').style.display = 'none';
-        document.getElementById('gAuthBtn').style.display = 'block';
+        document.getElementById('loginBtn').style.display = 'block';
         alert("로그아웃되었습니다.");
     });
 
@@ -475,14 +475,12 @@
         const fileContent = JSON.stringify(dataToSave);
 
         try {
-            // 파일 존재 여부 확인
             const listRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder", {
                 headers: { 'Authorization': 'Bearer ' + accessToken }
             });
             const listData = await listRes.json();
 
             if (listData.files && listData.files.length > 0) {
-                // 기존 파일 덮어쓰기 (PATCH)
                 const fileId = listData.files[0].id;
                 await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                     method: 'PATCH',
@@ -493,7 +491,6 @@
                     body: fileContent
                 });
             } else {
-                // 신규 파일 생성 (POST)
                 const metadata = {
                     name: 'workout_app_data.json',
                     parents: ['appDataFolder']
@@ -614,7 +611,7 @@
 
         presets.push(trimmedType);
         renderPresets();
-        autoUploadToDrive(); // 배경 자동 저장
+        autoUploadToDrive();
         closeModal();
     });
 
@@ -629,19 +626,25 @@
         if (confirm(`'${targetPreset}' 프리셋을 삭제하시겠습니까?`)) {
             presets.splice(selectedIndex, 1);
             renderPresets();
-            autoUploadToDrive(); // 배경 자동 저장
+            autoUploadToDrive();
             workoutTypeInput.value = '';
             recentHint.innerHTML = '';
         }
     });
 
+    // --- [수정된 최근 기록 힌트 업데이트 함수] ---
     function updateRecentHint(workoutType) {
         if (!workoutType) {
             recentHint.innerHTML = '';
             return;
         }
 
+        const today = new Date().toLocaleDateString('ko-KR');
+
+        // 오늘 날짜(today)가 아닌 '이전 과거 날짜' 중 가장 최근 기록 탐색
         for (const log of dailyLogs) {
+            if (log.date === today) continue; // 오늘 기록은 건너뜀
+
             const foundWorkout = log.workouts.find(w => w.type === workoutType);
             if (foundWorkout && foundWorkout.sets.length > 0) {
                 const listItems = foundWorkout.sets
@@ -676,7 +679,6 @@
         updateRecentHint(e.target.value.trim());
     });
 
-    // 세트 저장 및 드라이브 자동 동기화
     workoutForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
@@ -703,13 +705,11 @@
         renderLogs();
         updateRecentHint(type);
 
-        // 구글 드라이브 배경 자동 저장 호출
         autoUploadToDrive();
 
         document.getElementById('reps').focus();
     });
 
-    // 세트 삭제 및 드라이브 자동 동기화
     function deleteSet(dateIndex, workoutIndex, setIndex) {
         dailyLogs[dateIndex].workouts[workoutIndex].sets.splice(setIndex, 1);
 
@@ -725,7 +725,6 @@
         renderLogs();
         updateRecentHint(workoutTypeInput.value.trim());
 
-        // 구글 드라이브 배경 자동 저장 호출
         autoUploadToDrive();
     }
 
