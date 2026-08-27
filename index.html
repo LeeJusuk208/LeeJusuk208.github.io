@@ -6,12 +6,12 @@
     <title>운동 기록 앱</title>
 
     <!-- [PWA 설정] Manifest 및 모바일 테마 설정 -->
-    <link rel="manifest" href="./manifest.json">
+    <link rel="manifest" href="/workout-app/manifest.json">
     <meta name="theme-color" content="#121212">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="apple-touch-icon" href="/workout-app/icon-192.png">
 
     <!-- Google Identity Services (GSI) Client 라이브러리 -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -404,8 +404,8 @@
     // --- [1. PWA 서비스 워커 등록] ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
-                .then((reg) => console.log('Service Worker 등록 완료:', reg.scope))
+            navigator.serviceWorker.register('/workout-app/sw.js', { scope: '/workout-app/' })
+                .then((reg) => console.log('Service Worker 등록 성공 스코프:', reg.scope))
                 .catch((err) => console.error('Service Worker 등록 실패:', err));
         });
     }
