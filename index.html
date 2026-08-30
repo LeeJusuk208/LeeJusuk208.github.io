@@ -412,7 +412,6 @@
 
     // --- [2. Google OAuth 설정] ---
     const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com';
-    // drive.file 권한을 추가하여 일반 드라이브 경로에 로그 파일 생성을 허용합니다.
     const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
 
     let tokenClient;
@@ -528,17 +527,15 @@
         alert("로그아웃되었습니다.");
     });
 
-    // --- [3. Google Drive 연동 및 텍스트 로그 저장 로직] ---
-    async function writeLogToDrive(actionDetails, isSuccess) {
+    // --- [3. Google Drive 연동 및 분리된 로그 저장 로직] ---
+    async function writeLogToDrive(logMessage) {
         if (!accessToken) return;
 
         const now = new Date();
         const timestamp = now.toLocaleString('ko-KR');
-        const syncStatusText = isSuccess ? "성공" : "실패";
-        const logLine = `[${timestamp}] [동기화: ${syncStatusText}] ${actionDetails}\n`;
+        const logLine = `[${timestamp}] ${logMessage}\n`;
 
         try {
-            // 드라이브에서 'workout_app_log.txt' 파일 검색
             const listRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='workout_app_log.txt' and trashed=false", {
                 headers: { 'Authorization': 'Bearer ' + accessToken }
             });
@@ -547,14 +544,12 @@
             if (listData.files && listData.files.length > 0) {
                 const fileId = listData.files[0].id;
                 
-                // 기존 내용 다운로드
                 const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                     headers: { 'Authorization': 'Bearer ' + accessToken }
                 });
                 const existingText = await fileRes.text();
                 const newText = existingText + logLine;
 
-                // 파일 업데이트
                 await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                     method: 'PATCH',
                     headers: {
@@ -564,7 +559,6 @@
                     body: newText
                 });
             } else {
-                // 로그 파일 신규 생성
                 const metadata = { name: 'workout_app_log.txt', mimeType: 'text/plain' };
                 const form = new FormData();
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -585,6 +579,7 @@
         if (!accessToken) return;
 
         updateSyncStatus("드라이브에 저장 중...");
+        await writeLogToDrive(`[시스템] 구글 드라이브 동기화 시도 중...`);
 
         const dataToSave = {
             presets: JSON.parse(localStorage.getItem('presets')) || [],
@@ -592,7 +587,6 @@
         };
 
         const fileContent = JSON.stringify(dataToSave);
-        let isSuccess = false;
 
         try {
             const listRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder", {
@@ -626,16 +620,15 @@
                 });
             }
             updateSyncStatus("자동 동기화 완료");
-            isSuccess = true;
+            await writeLogToDrive(`[시스템] 동기화 성공`);
+
+            if (actionDetails) {
+                await writeLogToDrive(actionDetails);
+            }
         } catch (err) {
             console.error(err);
             updateSyncStatus("동기화 실패");
-            isSuccess = false;
-        }
-
-        // 특정 동작(프리셋/세트 저장 및 삭제)에 관한 로그를 기록합니다.
-        if (actionDetails) {
-            await writeLogToDrive(actionDetails, isSuccess);
+            await writeLogToDrive(`[시스템] 동기화 실패: 네트워크 연결 오류 또는 서버 문제 (${err.message})`);
         }
     }
 
@@ -741,7 +734,7 @@
 
         presets.push(trimmedType);
         renderPresets();
-        autoUploadToDrive(`프리셋 추가: "${trimmedType}"`);
+        autoUploadToDrive(`[프리셋 추가] "${trimmedType}"`);
         closeModal();
     });
 
@@ -756,7 +749,7 @@
         if (confirm(`'${targetPreset}' 프리셋을 삭제하시겠습니까?`)) {
             presets.splice(selectedIndex, 1);
             renderPresets();
-            autoUploadToDrive(`프리셋 삭제: "${targetPreset}"`);
+            autoUploadToDrive(`[프리셋 삭제] "${targetPreset}"`);
             workoutTypeInput.value = '';
             recentHint.innerHTML = '';
         }
@@ -833,7 +826,7 @@
         renderLogs();
         updateRecentHint(type);
 
-        autoUploadToDrive(`세트 저장: [${type}] ${weight}kg x ${reps}회`);
+        autoUploadToDrive(`[세트 저장] [${type}] ${weight}kg x ${reps}회`);
 
         document.getElementById('reps').focus();
     });
@@ -856,7 +849,7 @@
         renderLogs();
         updateRecentHint(workoutTypeInput.value.trim());
 
-        autoUploadToDrive(`세트 삭제: [${workoutType}] ${targetSet.weight}kg x ${targetSet.reps}회`);
+        autoUploadToDrive(`[세트 삭제] [${workoutType}] ${targetSet.weight}kg x ${targetSet.reps}회`);
     }
 
     function renderLogs() {
