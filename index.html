@@ -1,435 +1,908 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>운동 기록</title>
-  <link rel="manifest" href="manifest.json">
-  <style>
-    :root {
-      --primary-color: #4CAF50;
-      --bg-color: #f4f4f9;
-      --card-bg: #ffffff;
-      --text-color: #333333;
-    }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      margin: 0;
-      padding: 15px;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .card {
-      background: var(--card-bg);
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    h2, h3 { margin-top: 0; }
-    button {
-      background-color: var(--primary-color);
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    button.danger { background-color: #f44336; }
-    button.secondary { background-color: #757575; }
-    
-    /* 수치 조절 버튼 스티일 */
-    .stepper {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin: 5px 0;
-    }
-    .stepper button {
-      padding: 6px 10px;
-      font-size: 14px;
-    }
-    .stepper input {
-      width: 60px;
-      text-align: center;
-      font-size: 16px;
-      font-weight: bold;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      padding: 5px;
-      background-color: #eee;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>운동 기록 앱</title>
 
-    .form-group {
-      margin-bottom: 10px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 3px;
-    }
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 8px;
-      box-sizing: border-box;
-    }
-    .list-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
-    }
-  </style>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- [PWA 설정] Manifest 및 모바일 테마 설정 -->
+    <link rel="manifest" href="/workout-app/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/workout-app/icon-192.png">
+
+    <!-- Google Identity Services (GSI) Client 라이브러리 -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        :root {
+            --primary-color: #4A90E2;
+            --bg-color: #F5F7FA;
+            --card-bg: #FFFFFF;
+            --text-color: #333333;
+            --danger-color: #FF4D4D;
+            --overlay-bg: rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 16px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        body.is-pc #recordSection {
+            display: none !important;
+        }
+
+        .auth-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #EAEAEA;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary-color);
+        }
+
+        .user-name {
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: var(--text-color);
+        }
+
+        .sync-status {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .btn-login {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-login:disabled {
+            background-color: #A0C4EE;
+            cursor: not-allowed;
+        }
+
+        .btn-logout {
+            background-color: #F0F2F5;
+            color: #555;
+            border: 1px solid #CCC;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-logout:hover {
+            background-color: #E4E6EB;
+        }
+
+        h2 {
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .preset-input-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            width: 100%;
+        }
+
+        input, select, button {
+            padding: 12px;
+            border: 1px solid #DDD;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        select {
+            flex: 1;
+            min-width: 0;
+            background-color: white;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            background-color: #888;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .recent-hint {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: var(--primary-color);
+            font-weight: 600;
+            line-height: 1.5;
+            background-color: #EEF5FC;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .recent-hint:empty {
+            display: none;
+        }
+
+        .recent-hint-title {
+            margin-bottom: 4px;
+        }
+
+        .recent-hint-list {
+            list-style: none;
+            padding-left: 16px;
+            margin: 0;
+        }
+
+        .recent-hint-list li {
+            font-weight: normal;
+            color: #444;
+            margin-top: 2px;
+        }
+
+        .date-card {
+            background: #FAFAFA;
+            border: 1px solid #EAEAEA;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .date-header {
+            font-size: 1.05rem;
+            font-weight: bold;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            color: var(--primary-color);
+        }
+
+        .workout-group {
+            margin-bottom: 12px;
+        }
+
+        .workout-title {
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+        .set-list {
+            list-style: none;
+            padding-left: 10px;
+        }
+
+        .set-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.88rem;
+            padding: 4px 0;
+            color: #555;
+            border-bottom: 1px dashed #EEE;
+        }
+
+        .set-delete-btn {
+            background: none;
+            border: none;
+            color: var(--danger-color);
+            font-size: 0.75rem;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--overlay-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease-in-out;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-card {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .card { padding: 15px; }
+            .icon-btn { width: 40px; height: 40px; }
+            input, select, button { padding: 10px; font-size: 0.95rem; }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h2>🏋️ 운동 기록 앱</h2>
-    
-    <!-- 구글 로그인 & 동기화 -->
-    <div class="card">
-      <h3>Google Drive 동기화</h3>
-      <button id="auth-btn" onclick="handleAuth()">Google 계정 연동</button>
-      <button onclick="syncToDrive()" class="secondary">로그 및 데이터 동기화</button>
-      <p id="auth-status" style="font-size: 12px; color: #666;"></p>
-    </div>
 
-    <!-- 운동 프리셋 등록/수정 -->
-    <div class="card">
-      <h3 id="preset-form-title">운동 프리셋 추가</h3>
-      <input type="hidden" id="preset-id">
-      <div class="form-group">
-        <label>운동 이름</label>
-        <input type="text" id="preset-name" placeholder="예: 벤치프레스">
-      </div>
-      <div class="form-group">
-        <label>단위</label>
-        <select id="preset-unit">
-          <option value="kg">kg (무게)</option>
-          <option value="lbs">lbs (무게)</option>
-          <option value="sec">sec (초)</option>
-          <option value="min">min (분)</option>
-          <option value="reps">reps (횟수만)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>기본 세트 수</label>
-        <input type="number" id="preset-sets" value="3">
-      </div>
-      <div class="form-group">
-        <label>기본 휴식 시간(초)</label>
-        <input type="number" id="preset-rest" value="60">
-      </div>
-      <button onclick="savePreset()">프리셋 저장</button>
-      <button id="preset-cancel-btn" onclick="resetPresetForm()" class="secondary" style="display:none;">취소</button>
-    </div>
+<div class="container">
+    <section class="card" id="recordSection">
+        <h2>운동 기록하기</h2>
+        <form id="workoutForm">
+            <div class="form-group">
+                <label>자주 하는 운동 (프리셋)</label>
+                <div class="preset-input-group">
+                    <select id="presetSelect">
+                        <option value="">-- 운동 선택 --</option>
+                    </select>
+                    <button type="button" id="openModalBtn" class="icon-btn btn-primary" title="새 프리셋 추가">+</button>
+                    <button type="button" id="deletePresetBtn" class="icon-btn btn-danger" title="선택한 프리셋 삭제">-</button>
+                </div>
+            </div>
 
-    <!-- 운동 프리셋 목록 -->
-    <div class="card">
-      <h3>운동 목록</h3>
-      <div id="preset-list"></div>
-    </div>
+            <div class="form-group">
+                <label for="workoutType">운동 이름</label>
+                <input type="text" id="workoutType" placeholder="예: 스쿼트" required>
+                <div id="recentHint" class="recent-hint"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="weight">오늘의 무게 (kg)</label>
+                <input type="number" id="weight" placeholder="0" step="0.5" required>
+            </div>
 
-    <!-- 세트 기록 입력 영역 -->
-    <div class="card" id="workout-section" style="display:none;">
-      <h3 id="current-workout-title">운동 기록</h3>
-      
-      <div class="form-group">
-        <label id="value-label">무게/시간</label>
-        <div class="stepper">
-          <button onclick="adjustValue('workout-value', -5)">-5</button>
-          <button onclick="adjustValue('workout-value', -1)">-1</button>
-          <input type="text" id="workout-value" value="0" readonly>
-          <button onclick="adjustValue('workout-value', 1)">+1</button>
-          <button onclick="adjustValue('workout-value', 5)">+5</button>
+            <div class="form-group">
+                <label for="reps">목표 횟수 (회)</label>
+                <input type="number" id="reps" placeholder="0" required>
+            </div>
+
+            <button type="submit" class="btn-primary">세트 저장</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="auth-section">
+            <button id="loginBtn" class="btn-login">Google 로그인</button>
+            
+            <div id="userInfo" class="user-profile" style="display: none;">
+                <img id="userAvatar" class="user-avatar" src="" alt="프로필">
+                <div>
+                    <div id="userName" class="user-name">구글 사용자</div>
+                    <div id="syncStatus" class="sync-status">로그인 완료</div>
+                </div>
+            </div>
+            <button id="logoutBtn" class="btn-logout" style="display: none;">로그아웃</button>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label>횟수 (Reps)</label>
-        <div class="stepper">
-          <button onclick="adjustValue('workout-reps', -5)">-5</button>
-          <button onclick="adjustValue('workout-reps', -1)">-1</button>
-          <input type="text" id="workout-reps" value="10" readonly>
-          <button onclick="adjustValue('workout-reps', 1)">+1</button>
-          <button onclick="adjustValue('workout-reps', 5)">+5</button>
-        </div>
-      </div>
+        <h2>운동 일지</h2>
+        <div id="logList"></div>
+    </section>
+</div>
 
-      <button onclick="addSetRecord()">세트 추가</button>
-      
-      <h4>오늘의 세트 기록</h4>
-      <div id="set-list"></div>
+<div class="modal-overlay" id="presetModal">
+    <div class="modal-card">
+        <h2>새 프리셋 추가</h2>
+        <form id="presetForm">
+            <div class="form-group">
+                <label for="newPresetType">운동 이름</label>
+                <input type="text" id="newPresetType" placeholder="예: 숄더 프레스" required>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" id="closeModalBtn" class="btn-secondary">취소</button>
+                <button type="submit" class="btn-primary">저장</button>
+            </div>
+        </form>
     </div>
-  </div>
+</div>
 
-  <script>
-    // --- 설정 및 데이터 상태 ---
-    const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com'; // 사용자의 Client ID로 변경 필요
-    let tokenClient;
-    let accessToken = null;
-
-    let presets = JSON.parse(localStorage.getItem('presets')) || [];
-    let setRecords = JSON.parse(localStorage.getItem('setRecords')) || [];
-    let appLogs = JSON.parse(localStorage.getItem('appLogs')) || [];
-    let currentPreset = null;
-
-    // --- 로깅 시스템 ---
-    function logAction(message) {
-      const timestamp = new Date().toLocaleString('ko-KR');
-      const logEntry = `[${timestamp}] ${message}`;
-      
-      // 1. 콘솔 출력
-      console.log(logEntry);
-      
-      // 2. 로컬 배열 저장 및 저장소 반영
-      appLogs.push(logEntry);
-      localStorage.setItem('appLogs', JSON.stringify(appLogs));
-    }
-
-    // --- 수치 조절 (+/- 버튼) ---
-    function adjustValue(inputId, delta) {
-      const input = document.getElementById(inputId);
-      let val = parseFloat(input.value) || 0;
-      val = Math.max(0, val + delta); // 음수 방지
-      input.value = val;
-    }
-
-    // --- 프리셋 CRUD ---
-    function renderPresets() {
-      const listEl = document.getElementById('preset-list');
-      listEl.innerHTML = '';
-      
-      presets.forEach(p => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerHTML = `
-          <div>
-            <strong>${p.name}</strong> (${p.unit}) - ${p.sets}세트 / 휴식 ${p.rest}초
-          </div>
-          <div>
-            <button onclick="selectPreset('${p.id}')">운동하기</button>
-            <button onclick="editPreset('${p.id}')" class="secondary">수정</button>
-            <button onclick="deletePreset('${p.id}')" class="danger">삭제</button>
-          </div>
-        `;
-        listEl.appendChild(item);
-      });
-    }
-
-    function savePreset() {
-      const id = document.getElementById('preset-id').value;
-      const name = document.getElementById('preset-name').value.trim();
-      const unit = document.getElementById('preset-unit').value;
-      const sets = parseInt(document.getElementById('preset-sets').value);
-      const rest = parseInt(document.getElementById('preset-rest').value);
-
-      if (!name) {
-        alert('운동 이름을 입력하세요.');
-        return;
-      }
-
-      if (id) {
-        // 수정
-        const index = presets.findIndex(p => p.id === id);
-        if (index !== -1) {
-          presets[index] = { id, name, unit, sets, rest };
-          logAction(`프리셋 수정: ${name} (${unit})`);
-        }
-      } else {
-        // 신규 추가
-        const newPreset = { id: Date.now().toString(), name, unit, sets, rest };
-        presets.push(newPreset);
-        logAction(`프리셋 추가: ${name} (${unit})`);
-      }
-
-      localStorage.setItem('presets', JSON.stringify(presets));
-      resetPresetForm();
-      renderPresets();
-    }
-
-    function editPreset(id) {
-      const preset = presets.find(p => p.id === id);
-      if (!preset) return;
-
-      document.getElementById('preset-id').value = preset.id;
-      document.getElementById('preset-name').value = preset.name;
-      document.getElementById('preset-unit').value = preset.unit;
-      document.getElementById('preset-sets').value = preset.sets;
-      document.getElementById('preset-rest').value = preset.rest;
-
-      document.getElementById('preset-form-title').innerText = '운동 프리셋 수정';
-      document.getElementById('preset-cancel-btn').style.display = 'inline-block';
-    }
-
-    function resetPresetForm() {
-      document.getElementById('preset-id').value = '';
-      document.getElementById('preset-name').value = '';
-      document.getElementById('preset-unit').value = 'kg';
-      document.getElementById('preset-sets').value = '3';
-      document.getElementById('preset-rest').value = '60';
-
-      document.getElementById('preset-form-title').innerText = '운동 프리셋 추가';
-      document.getElementById('preset-cancel-btn').style.display = 'none';
-    }
-
-    function deletePreset(id) {
-      const preset = presets.find(p => p.id === id);
-      if (confirm('정말 삭제하시겠습니까?')) {
-        presets = presets.filter(p => p.id !== id);
-        localStorage.setItem('presets', JSON.stringify(presets));
-        logAction(`프리셋 삭제: ${preset ? preset.name : id}`);
-        renderPresets();
-      }
-    }
-
-    // --- 세트 기록 관리 ---
-    function selectPreset(id) {
-      currentPreset = presets.find(p => p.id === id);
-      if (!currentPreset) return;
-
-      document.getElementById('workout-section').style.display = 'block';
-      document.getElementById('current-workout-title').innerText = `운동: ${currentPreset.name}`;
-      document.getElementById('value-label').innerText = `수치 (${currentPreset.unit})`;
-      renderSetRecords();
-      logAction(`운동 선택: ${currentPreset.name}`);
-    }
-
-    function addSetRecord() {
-      if (!currentPreset) return;
-
-      const val = parseFloat(document.getElementById('workout-value').value);
-      const reps = parseInt(document.getElementById('workout-reps').value);
-
-      const record = {
-        id: Date.now().toString(),
-        presetId: currentPreset.id,
-        presetName: currentPreset.name,
-        unit: currentPreset.unit,
-        val: val,
-        reps: reps,
-        timestamp: new Date().toLocaleTimeString('ko-KR')
-      };
-
-      setRecords.push(record);
-      localStorage.setItem('setRecords', JSON.stringify(setRecords));
-      logAction(`세트 추가 - ${currentPreset.name}: ${val}${currentPreset.unit} x ${reps}회`);
-      renderSetRecords();
-    }
-
-    function deleteSetRecord(id) {
-      const rec = setRecords.find(r => r.id === id);
-      setRecords = setRecords.filter(r => r.id !== id);
-      localStorage.setItem('setRecords', JSON.stringify(setRecords));
-      logAction(`세트 삭제 - ${rec ? rec.presetName : id}`);
-      renderSetRecords();
-    }
-
-    function renderSetRecords() {
-      if (!currentPreset) return;
-      const listEl = document.getElementById('set-list');
-      listEl.innerHTML = '';
-
-      const currentRecords = setRecords.filter(r => r.presetId === currentPreset.id);
-
-      currentRecords.forEach((r, idx) => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerHTML = `
-          <span>${idx + 1}세트: ${r.val}${r.unit} × ${r.reps}회 (${r.timestamp})</span>
-          <button onclick="deleteSetRecord('${r.id}')" class="danger">삭제</button>
-        `;
-        listEl.appendChild(item);
-      });
-    }
-
-    // --- 구글 API 연동 및 드라이브 로그 파일 저장 ---
-    function initGoogleAuth() {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: (response) => {
-          if (response.access_token) {
-            accessToken = response.access_token;
-            document.getElementById('auth-status').innerText = '구글 드라이브 연동 완료!';
-            logAction('Google OAuth 인증 성공');
-          }
-        },
-      });
-    }
-
-    function handleAuth() {
-      if (tokenClient) {
-        tokenClient.requestAccessToken();
-      } else {
-        alert('Google API가 로드되지 않았습니다.');
-      }
-    }
-
-    async function syncToDrive() {
-      if (!accessToken) {
-        alert('먼저 Google 계정을 연동해 주세요.');
-        return;
-      }
-
-      logAction('구글 드라이브 동기화 시도 중...');
-      const logContent = appLogs.join('\n');
-
-      try {
-        // 드라이브에 workout_app_log.txt 파일 검색
-        const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='workout_app_log.txt' and trashed=false", {
-          headers: { Authorization: `Bearer ${accessToken}` }
+<script>
+    // --- [1. PWA 서비스 워커 등록] ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/workout-app/sw.js', { scope: '/workout-app/' })
+                .then((reg) => console.log('Service Worker 등록 성공 스코프:', reg.scope))
+                .catch((err) => console.error('Service Worker 등록 실패:', err));
         });
-        const searchData = await searchRes.json();
-
-        let fileId = null;
-        if (searchData.files && searchData.files.length > 0) {
-          fileId = searchData.files[0].id;
-        }
-
-        if (fileId) {
-          // 기존 파일 덮어쓰기 (PATCH)
-          await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'text/plain'
-            },
-            body: logContent
-          });
-        } else {
-          // 새 파일 생성 (POST - multipart/related)
-          const metadata = { name: 'workout_app_log.txt', mimeType: 'text/plain' };
-          const form = new FormData();
-          form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-          form.append('file', new Blob([logContent], { type: 'text/plain' }));
-
-          await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: form
-          });
-        }
-
-        alert('로그 및 데이터가 구글 드라이브에 저장되었습니다!');
-        logAction('구글 드라이브 로그 동기화 완료');
-      } catch (err) {
-        console.error(err);
-        logAction(`구글 드라이브 동기화 실패: ${err.message}`);
-        alert('동기화에 실패했습니다.');
-      }
     }
 
-    window.onload = () => {
-      renderPresets();
-      setTimeout(initGoogleAuth, 1000);
+    // --- [2. Google OAuth 설정] ---
+    const CLIENT_ID = '273868307070-lknk70ubrdu7d51p3vkfiu4ftecfsadl.apps.googleusercontent.com';
+    // drive.file 권한을 추가하여 일반 드라이브 경로에 로그 파일 생성을 허용합니다.
+    const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
+
+    let tokenClient;
+    let accessToken = localStorage.getItem('googleAccessToken') || null;
+
+    function showLoggedInUI(userProfile) {
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = 'Google 로그인';
+        loginBtn.disabled = false;
+        loginBtn.style.display = 'none';
+
+        document.getElementById('userInfo').style.display = 'flex';
+        document.getElementById('logoutBtn').style.display = 'block';
+
+        if (userProfile) {
+            if (userProfile.name) document.getElementById('userName').textContent = userProfile.name;
+            if (userProfile.picture) document.getElementById('userAvatar').src = userProfile.picture;
+        }
+    }
+
+    function showLoggedOutUI() {
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = 'Google 로그인';
+        loginBtn.disabled = false;
+        loginBtn.style.display = 'block';
+
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'none';
+    }
+
+    function updateSyncStatus(text) {
+        document.getElementById('syncStatus').textContent = text;
+    }
+
+    function initGoogleAuth() {
+        if (typeof google === 'undefined') return;
+
+        const savedUser = localStorage.getItem('googleUser');
+        if (savedUser && accessToken) {
+            showLoggedInUI(JSON.parse(savedUser));
+            updateSyncStatus("로그인 완료");
+        } else {
+            showLoggedOutUI();
+        }
+
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: async (tokenResponse) => {
+                if (tokenResponse.access_token) {
+                    accessToken = tokenResponse.access_token;
+                    localStorage.setItem('googleAccessToken', accessToken);
+                    
+                    updateSyncStatus("프로필 불러오는 중...");
+                    await fetchUserProfile(accessToken);
+                    
+                    updateSyncStatus("드라이브 데이터 동기화 중...");
+                    await autoDownloadFromDrive();
+                } else {
+                    alert("로그인 인증에 실패했습니다.");
+                    showLoggedOutUI();
+                }
+            },
+        });
+    }
+
+    async function fetchUserProfile(token) {
+        try {
+            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const profile = await response.json();
+
+            if (profile && profile.name) {
+                const userData = {
+                    name: profile.name,
+                    picture: profile.picture
+                };
+                localStorage.setItem('googleUser', JSON.stringify(userData));
+                showLoggedInUI(userData);
+            }
+        } catch (error) {
+            console.error("프로필 정보를 가져오는 데 실패했습니다:", error);
+        }
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', () => {
+        const loginBtn = document.getElementById('loginBtn');
+        loginBtn.innerText = '로그인 중...';
+        loginBtn.disabled = true;
+
+        if (tokenClient) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            alert("구글 API 라이브러리가 아직 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+            loginBtn.innerText = 'Google 로그인';
+            loginBtn.disabled = false;
+        }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        if (accessToken) {
+            google.accounts.oauth2.revoke(accessToken, () => {
+                console.log('구글 토큰이 취소되었습니다.');
+            });
+        }
+
+        localStorage.removeItem('googleUser');
+        localStorage.removeItem('googleAccessToken');
+        accessToken = null;
+
+        showLoggedOutUI();
+        alert("로그아웃되었습니다.");
+    });
+
+    // --- [3. Google Drive 연동 및 텍스트 로그 저장 로직] ---
+    async function writeLogToDrive(actionDetails, isSuccess) {
+        if (!accessToken) return;
+
+        const now = new Date();
+        const timestamp = now.toLocaleString('ko-KR');
+        const syncStatusText = isSuccess ? "성공" : "실패";
+        const logLine = `[${timestamp}] [동기화: ${syncStatusText}] ${actionDetails}\n`;
+
+        try {
+            // 드라이브에서 'workout_app_log.txt' 파일 검색
+            const listRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='workout_app_log.txt' and trashed=false", {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
+            });
+            const listData = await listRes.json();
+
+            if (listData.files && listData.files.length > 0) {
+                const fileId = listData.files[0].id;
+                
+                // 기존 내용 다운로드
+                const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                const existingText = await fileRes.text();
+                const newText = existingText + logLine;
+
+                // 파일 업데이트
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': 'text/plain; charset=utf-8'
+                    },
+                    body: newText
+                });
+            } else {
+                // 로그 파일 신규 생성
+                const metadata = { name: 'workout_app_log.txt', mimeType: 'text/plain' };
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', new Blob([logLine], { type: 'text/plain; charset=utf-8' }));
+
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + accessToken },
+                    body: form
+                });
+            }
+        } catch (err) {
+            console.error("로그 저장 실패:", err);
+        }
+    }
+
+    async function autoUploadToDrive(actionDetails = "") {
+        if (!accessToken) return;
+
+        updateSyncStatus("드라이브에 저장 중...");
+
+        const dataToSave = {
+            presets: JSON.parse(localStorage.getItem('presets')) || [],
+            dailyLogs: JSON.parse(localStorage.getItem('dailyLogs')) || []
+        };
+
+        const fileContent = JSON.stringify(dataToSave);
+        let isSuccess = false;
+
+        try {
+            const listRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder", {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
+            });
+            const listData = await listRes.json();
+
+            if (listData.files && listData.files.length > 0) {
+                const fileId = listData.files[0].id;
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: fileContent
+                });
+            } else {
+                const metadata = {
+                    name: 'workout_app_data.json',
+                    parents: ['appDataFolder']
+                };
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + accessToken },
+                    body: form
+                });
+            }
+            updateSyncStatus("자동 동기화 완료");
+            isSuccess = true;
+        } catch (err) {
+            console.error(err);
+            updateSyncStatus("동기화 실패");
+            isSuccess = false;
+        }
+
+        // 특정 동작(프리셋/세트 저장 및 삭제)에 관한 로그를 기록합니다.
+        if (actionDetails) {
+            await writeLogToDrive(actionDetails, isSuccess);
+        }
+    }
+
+    async function autoDownloadFromDrive() {
+        if (!accessToken) return;
+
+        try {
+            const listRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder", {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
+            });
+            const listData = await listRes.json();
+
+            if (listData.files && listData.files.length > 0) {
+                const fileId = listData.files[0].id;
+                const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                const restoredData = await fileRes.json();
+
+                if (restoredData.presets && restoredData.dailyLogs) {
+                    localStorage.setItem('presets', JSON.stringify(restoredData.presets));
+                    localStorage.setItem('dailyLogs', JSON.stringify(restoredData.dailyLogs));
+
+                    presets = restoredData.presets;
+                    dailyLogs = restoredData.dailyLogs;
+
+                    renderPresets();
+                    renderLogs();
+                    updateSyncStatus("자동 동기화 완료");
+                }
+            } else {
+                updateSyncStatus("드라이브에 저장된 데이터 없음");
+            }
+        } catch (err) {
+            console.error(err);
+            updateSyncStatus("데이터 불러오기 실패");
+        }
+    }
+
+    window.onload = function () {
+        setTimeout(initGoogleAuth, 300);
     };
-  </script>
+
+    // --- [4. 운동 앱 UI 로직] ---
+    function checkDeviceType() {
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+            || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+
+        if (!isMobileDevice) {
+            document.body.classList.add('is-pc');
+        }
+    }
+    checkDeviceType();
+
+    const presetSelect = document.getElementById('presetSelect');
+    const openModalBtn = document.getElementById('openModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const deletePresetBtn = document.getElementById('deletePresetBtn');
+    const presetModal = document.getElementById('presetModal');
+    const presetForm = document.getElementById('presetForm');
+    const workoutForm = document.getElementById('workoutForm');
+    const workoutTypeInput = document.getElementById('workoutType');
+    const recentHint = document.getElementById('recentHint');
+    const logList = document.getElementById('logList');
+
+    const defaultPresets = ["컨벤셔널 데드리프트", "바벨 벤치프레스", "백 스쿼트"];
+
+    let presets = JSON.parse(localStorage.getItem('presets')) || defaultPresets;
+    let dailyLogs = JSON.parse(localStorage.getItem('dailyLogs')) || [];
+
+    function openModal() { presetModal.classList.add('active'); }
+    function closeModal() { presetModal.classList.remove('active'); presetForm.reset(); }
+
+    openModalBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+    presetModal.addEventListener('click', (e) => { if (e.target === presetModal) closeModal(); });
+
+    function renderPresets() {
+        presetSelect.innerHTML = '<option value="">-- 운동 선택 --</option>';
+        presets.forEach((type, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = type;
+            presetSelect.appendChild(option);
+        });
+        localStorage.setItem('presets', JSON.stringify(presets));
+    }
+
+    presetForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const typeInput = document.getElementById('newPresetType');
+        const trimmedType = typeInput.value.trim();
+
+        if (!trimmedType) return;
+
+        const isDuplicate = presets.some(preset => preset.toLowerCase() === trimmedType.toLowerCase());
+
+        if (isDuplicate) {
+            alert(`'${trimmedType}'은(는) 이미 등록되어 있는 운동 프리셋입니다.`);
+            typeInput.focus();
+            return;
+        }
+
+        presets.push(trimmedType);
+        renderPresets();
+        autoUploadToDrive(`프리셋 추가: "${trimmedType}"`);
+        closeModal();
+    });
+
+    deletePresetBtn.addEventListener('click', () => {
+        const selectedIndex = presetSelect.value;
+        if (selectedIndex === "") {
+            alert("삭제할 프리셋을 드롭다운에서 먼저 선택해 주세요.");
+            return;
+        }
+        
+        const targetPreset = presets[selectedIndex];
+        if (confirm(`'${targetPreset}' 프리셋을 삭제하시겠습니까?`)) {
+            presets.splice(selectedIndex, 1);
+            renderPresets();
+            autoUploadToDrive(`프리셋 삭제: "${targetPreset}"`);
+            workoutTypeInput.value = '';
+            recentHint.innerHTML = '';
+        }
+    });
+
+    function updateRecentHint(workoutType) {
+        if (!workoutType) {
+            recentHint.innerHTML = '';
+            return;
+        }
+
+        const today = new Date().toLocaleDateString('ko-KR');
+
+        for (const log of dailyLogs) {
+            if (log.date === today) continue;
+
+            const foundWorkout = log.workouts.find(w => w.type === workoutType);
+            if (foundWorkout && foundWorkout.sets.length > 0) {
+                const listItems = foundWorkout.sets
+                    .map((s, i) => `<li>• ${i + 1}세트: ${s.weight}kg × ${s.reps}회</li>`)
+                    .join('');
+
+                recentHint.innerHTML = `
+                    <div class="recent-hint-title">💡 최근 기록 (${log.date})</div>
+                    <ul class="recent-hint-list">
+                        ${listItems}
+                    </ul>
+                `;
+                return;
+            }
+        }
+        recentHint.innerHTML = '<div class="recent-hint-title">💡 이전 기록이 없습니다.</div>';
+    }
+
+    presetSelect.addEventListener('change', (e) => {
+        const selectedIndex = e.target.value;
+        if (selectedIndex !== "") {
+            const selectedType = presets[selectedIndex];
+            workoutTypeInput.value = selectedType;
+            updateRecentHint(selectedType);
+            document.getElementById('weight').focus();
+        } else {
+            recentHint.innerHTML = '';
+        }
+    });
+
+    workoutTypeInput.addEventListener('input', (e) => {
+        updateRecentHint(e.target.value.trim());
+    });
+
+    workoutForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const type = workoutTypeInput.value.trim();
+        const weight = Number(document.getElementById('weight').value);
+        const reps = Number(document.getElementById('reps').value);
+        const today = new Date().toLocaleDateString('ko-KR');
+
+        let todayLog = dailyLogs.find(log => log.date === today);
+        if (!todayLog) {
+            todayLog = { date: today, workouts: [] };
+            dailyLogs.unshift(todayLog);
+        }
+
+        let workoutGroup = todayLog.workouts.find(w => w.type === type);
+        if (!workoutGroup) {
+            workoutGroup = { type: type, sets: [] };
+            todayLog.workouts.push(workoutGroup);
+        }
+
+        workoutGroup.sets.push({ weight, reps });
+
+        localStorage.setItem('dailyLogs', JSON.stringify(dailyLogs));
+        renderLogs();
+        updateRecentHint(type);
+
+        autoUploadToDrive(`세트 저장: [${type}] ${weight}kg x ${reps}회`);
+
+        document.getElementById('reps').focus();
+    });
+
+    function deleteSet(dateIndex, workoutIndex, setIndex) {
+        const targetSet = dailyLogs[dateIndex].workouts[workoutIndex].sets[setIndex];
+        const workoutType = dailyLogs[dateIndex].workouts[workoutIndex].type;
+
+        dailyLogs[dateIndex].workouts[workoutIndex].sets.splice(setIndex, 1);
+
+        if (dailyLogs[dateIndex].workouts[workoutIndex].sets.length === 0) {
+            dailyLogs[dateIndex].workouts.splice(workoutIndex, 1);
+        }
+
+        if (dailyLogs[dateIndex].workouts.length === 0) {
+            dailyLogs.splice(dateIndex, 1);
+        }
+
+        localStorage.setItem('dailyLogs', JSON.stringify(dailyLogs));
+        renderLogs();
+        updateRecentHint(workoutTypeInput.value.trim());
+
+        autoUploadToDrive(`세트 삭제: [${workoutType}] ${targetSet.weight}kg x ${targetSet.reps}회`);
+    }
+
+    function renderLogs() {
+        logList.innerHTML = '';
+
+        if (dailyLogs.length === 0) {
+            logList.innerHTML = '<p style="text-align: center; color: #888; padding: 20px;">등록된 기록이 없습니다.</p>';
+            return;
+        }
+
+        dailyLogs.forEach((log, dateIdx) => {
+            const dateCard = document.createElement('div');
+            dateCard.className = 'date-card';
+
+            let html = `<div class="date-header">${log.date}</div>`;
+
+            log.workouts.forEach((workout, workoutIdx) => {
+                html += `
+                    <div class="workout-group">
+                        <div class="workout-title">🏋️ ${workout.type}</div>
+                        <ul class="set-list">
+                `;
+
+                workout.sets.forEach((set, setIdx) => {
+                    html += `
+                        <li class="set-item">
+                            <span><strong>${setIdx + 1}세트:</strong> ${set.weight}kg × ${set.reps}회</span>
+                            <button class="set-delete-btn" onclick="deleteSet(${dateIdx}, ${workoutIdx}, ${setIdx})">삭제</button>
+                        </li>
+                    `;
+                });
+
+                html += `
+                        </ul>
+                    </div>
+                `;
+            });
+
+            dateCard.innerHTML = html;
+            logList.appendChild(dateCard);
+        });
+    }
+
+    renderPresets();
+    renderLogs();
+</script>
+
 </body>
 </html>
